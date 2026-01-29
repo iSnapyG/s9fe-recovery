@@ -1,0 +1,29 @@
+name: Build crDroid ROM
+on: workflow_dispatch
+jobs:
+  build_rom:
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Liberate Disk Space
+      run: |
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+        sudo docker image prune --all --force
+    - name: Setup Tools
+      run: sudo apt-get install -y bc bison build-essential curl flex g++-multilib gcc-multilib git gnupg gperf libncurses5-dev lib32z1-dev libssl-dev libxml2-utils lzop xsltproc zip zlib1g-dev
+    - name: Sync Source
+      run: |
+        mkdir workspace && cd workspace
+        curl https://storage.googleapis.com/git-repo-downloads/repo > repo && chmod +x repo
+        ./repo init -u https://github.com/crdroidandroid/android.git -b 14.0 --depth=1
+        ./repo sync -c -j$(nproc) --force-sync --no-tags --no-clone-bundle
+    - name: Build GSI (Universal)
+      run: |
+        cd workspace
+        . build/envsetup.sh
+        lunch treble_arm64_bgN-userdebug
+        make systemimage -j$(nproc)
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: crDroid_S9FE_Build
+        path: workspace/out/target/product/generic/system.img

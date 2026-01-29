@@ -1,0 +1,42 @@
+name: Build TWRP
+on: workflow_dispatch
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    permissions:
+      contents: write
+    steps:
+    - name: Checkout Tree
+      uses: actions/checkout@v4
+      with:
+        path: device/samsung/gts9fe
+
+    - name: Setup Environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y git gnupg flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 libncurses5 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig
+
+    - name: Sync Source
+      run: |
+        mkdir ~/twrp && cd ~/twrp
+        curl https://storage.googleapis.com/git-repo-downloads/repo > repo && chmod +x repo
+        ./repo init --depth=1 -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git -b twrp-12.1
+        ./repo sync -c -j$(nproc)
+
+    - name: Build
+      run: |
+        cd ~/twrp
+        # Link the tree from step 1
+        mkdir -p device/samsung
+        cp -r $GITHUB_WORKSPACE/device/samsung/gts9fe device/samsung/
+        export ALLOW_MISSING_DEPENDENCIES=true
+        . build/envsetup.sh
+        # Attempt to auto-detect lunch target or default to generic
+        lunch twrp_$(basename $GITHUB_WORKSPACE/device/samsung/gts9fe)-eng || lunch twrp_gts9fe-eng
+        mka recoveryimage
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: TWRP-Recovery
+        path: ~/twrp/out/target/product/*/recovery.img
